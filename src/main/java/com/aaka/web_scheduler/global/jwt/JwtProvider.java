@@ -1,38 +1,42 @@
 package com.aaka.web_scheduler.global.jwt;
 
-import com.auth0.jwt.*;
-import com.auth0.jwt.algorithms.*;
-import org.springframework.beans.factory.annotation.Value;
+import com.auth0.jwt.JWT;
+import com.auth0.jwt.algorithms.Algorithm;
+import com.auth0.jwt.interfaces.DecodedJWT;
+import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Component;
+
 import java.util.Date;
 
 @Component
 public class JwtProvider {
+    private static final String SECRET = "여기에256비트이상의랜덤문자열을넣으세요";
+    private static final Algorithm ALG = Algorithm.HMAC256(SECRET);
+    private static final long EXP_MS = 1000 * 60 * 60; // 1시간
 
-    @Value("${jwt.secret}")
-    private String secret;
-    private final long EXP_MS = 1000 * 60 * 60; // 1시간
-
-    public String createToken(String email) {
-        Date now = new Date();
+    /** Authentication → JWT 발급 */
+    public String generateToken(Authentication auth) {
+        String email = ((com.aaka.web_scheduler.domain.user.entity.User) auth.getPrincipal()).getEmail();
         return JWT.create()
                 .withSubject(email)
-                .withIssuedAt(now)
-                .withExpiresAt(new Date(now.getTime() + EXP_MS))
-                .sign(Algorithm.HMAC512(secret));
+                .withIssuedAt(new Date())
+                .withExpiresAt(new Date(System.currentTimeMillis() + EXP_MS))
+                .sign(ALG);
     }
 
-    public String getEmail(String token) {
-        return JWT.require(Algorithm.HMAC512(secret))
-                .build().verify(token).getSubject();
-    }
-
-    public boolean validate(String token) {
+    /** 토큰 검증 (서명+만료) */
+    public boolean validateToken(String token) {
         try {
-            JWT.require(Algorithm.HMAC512(secret)).build().verify(token);
+            ALG.verify(JWT.decode(token));
             return true;
         } catch (Exception e) {
             return false;
         }
+    }
+
+    /** 서명은 통과했다고 가정하고, subject(=email) 반환 */
+    public String getEmail(String token) {
+        DecodedJWT jwt = JWT.decode(token);
+        return jwt.getSubject();
     }
 }
