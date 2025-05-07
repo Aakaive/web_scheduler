@@ -1,42 +1,71 @@
 package com.aaka.web_scheduler.global.jwt;
 
-import com.auth0.jwt.JWT;
-import com.auth0.jwt.algorithms.Algorithm;
-import com.auth0.jwt.interfaces.DecodedJWT;
-import org.springframework.security.core.Authentication;
+import java.nio.charset.StandardCharsets;
+import java.security.Key;
+import java.util.Date;
+
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
-import java.util.Date;
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.SignatureAlgorithm;
+import io.jsonwebtoken.security.Keys;
 
 @Component
 public class JwtProvider {
-    private static final String SECRET = "여기에256비트이상의랜덤문자열을넣으세요";
-    private static final Algorithm ALG = Algorithm.HMAC256(SECRET);
-    private static final long EXP_MS = 1000 * 60 * 60; // 1시간
 
-    /** Authentication → JWT 발급 */
-    public String generateToken(Authentication auth) {
-        String email = ((com.aaka.web_scheduler.domain.user.entity.User) auth.getPrincipal()).getEmail();
-        return JWT.create()
-                .withSubject(email)
-                .withIssuedAt(new Date())
-                .withExpiresAt(new Date(System.currentTimeMillis() + EXP_MS))
-                .sign(ALG);
+    private final Key key;
+    private final long validityInMilliseconds;
+
+    public JwtProvider(
+            @Value("${jwt.secret}") String secret,
+            @Value("${jwt.expiration-ms}") long validityInMilliseconds
+    ) {
+        this.key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
+        this.validityInMilliseconds = validityInMilliseconds;
     }
 
-    /** 토큰 검증 (서명+만료) */
+    /**
+     * 이메일(subject) 기반으로 JWT 생성
+     */
+    public String generateToken(String email) {
+        Date now    = new Date();
+        Date expiry = new Date(now.getTime() + validityInMilliseconds);
+
+        return Jwts.builder()
+                .setSubject(email)
+                .setIssuedAt(now)
+                .setExpiration(expiry)
+                .signWith(key, SignatureAlgorithm.HS256)
+                .compact();
+    }
+
+    /** 토큰 검증 */
     public boolean validateToken(String token) {
         try {
-            ALG.verify(JWT.decode(token));
+            Jwts.parserBuilder()
+                    .setSigningKey(key)
+                    .build()
+                    .parseClaimsJws(token);
             return true;
         } catch (Exception e) {
             return false;
         }
     }
 
-    /** 서명은 통과했다고 가정하고, subject(=email) 반환 */
+    /** 토큰에서 subject(email) 추출 */
     public String getEmail(String token) {
-        DecodedJWT jwt = JWT.decode(token);
-        return jwt.getSubject();
+        Claims claims = Jwts.parserBuilder()
+                .setSigningKey(key)
+                .build()
+                .parseClaimsJws(token)
+                .getBody();
+        return claims.getSubject();
+    }
+
+    /** JWT 만료시간(밀리초) 반환 */
+    public long getExpirationMillis() {
+        return validityInMilliseconds;
     }
 }

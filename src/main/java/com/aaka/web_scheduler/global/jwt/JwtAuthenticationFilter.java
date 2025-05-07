@@ -41,14 +41,24 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 }
             }
         }
+        System.out.println(">> JwtFilter 토큰: " + token);
         // 2) 검증 후 SecurityContext에 인증 세팅
         if (token != null && jwtProvider.validateToken(token)) {
             String email = jwtProvider.getEmail(token);
             User user = userRepository.findByEmail(email).orElseThrow();
+
+            System.out.println(">>> JwtFilter VALID    = true, user = " + email);
+
             UsernamePasswordAuthenticationToken auth =
                     new UsernamePasswordAuthenticationToken(user, null, user.getAuthorities());
             SecurityContextHolder.getContext().setAuthentication(auth);
+
+            System.out.println(">>> JwtFilter AUTH SET = " +
+                    SecurityContextHolder.getContext().getAuthentication());
+        } else {
+            System.out.println(">>> JwtFilter VALID    = false or token null");
         }
+
         chain.doFilter(req, res);
     }
 }
