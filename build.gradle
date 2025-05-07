@@ -44,6 +44,26 @@ dependencies {
     // 런타임에 실제 구현체와 Jackson 직렬화 모듈
     runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.11.5'
     runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.11.5'
+
+    implementation 'com.google.code.gson:gson:2.8.9'
+
+    // 1) Google Calendar REST API 클라이언트
+    implementation 'com.google.apis:google-api-services-calendar:v3-rev20240517-2.0.0'
+    //    → Calendar API 최신 버전 (2024-05-17 릴리즈)  [oai_citation:0‡Deps](https://deps.dev/maven/com.google.apis%3Agoogle-api-services-calendar/v3-rev20211229-1.32.1?utm_source=chatgpt.com)
+
+    // 2) Google API 공통 클라이언트 (OAuth2, HTTP 요청/응답 등 지원)
+    implementation 'com.google.api-client:google-api-client:1.32.1'
+    //    → Google APIs Client Library for Java  [oai_citation:1‡MvnRepository](https://mvnrepository.com/artifact/com.google.api-client/google-api-client/1.32.1?utm_source=chatgpt.com)
+
+    // 3) Google HTTP 클라이언트의 Jackson2 JSON 확장
+    implementation 'com.google.http-client:google-http-client-jackson2:1.32.1'
+    //    → JSON 직렬화/역직렬화 지원  [oai_citation:2‡MvnRepository](https://mvnrepository.com/artifact/com.google.http-client/google-http-client-jackson2/1.32.1?utm_source=chatgpt.com)
+
+    // 4) OAuth2 인증용 Jetty 로컬 서버 리시버 (버전 코드는 맞춰서 사용)
+    implementation 'com.google.oauth-client:google-oauth-client-jetty:1.32.1'
+    //    → OAuth2 인증 코드 수신용 로컬 서버  [oai_citation:3‡Maven Central](https://central.sonatype.com/artifact/com.google.oauth-client/google-oauth-client-jetty/1.32.1?utm_source=chatgpt.com)
+
+
 }
 
 tasks.named('test') {
