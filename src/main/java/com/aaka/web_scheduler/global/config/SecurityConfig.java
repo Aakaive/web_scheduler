@@ -6,16 +6,17 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;                      // 추가
 import org.springframework.http.ResponseCookie;
-import org.springframework.web.cors.CorsConfiguration;
-import org.springframework.web.cors.CorsConfigurationSource;
-import org.springframework.web.servlet.config.annotation.CorsRegistry;
-import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
-
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.authentication.HttpStatusEntryPoint;   // 추가
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.servlet.config.annotation.CorsRegistry;
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 import com.aaka.web_scheduler.global.jwt.JwtAuthenticationFilter;
 import com.aaka.web_scheduler.global.jwt.JwtProvider;
@@ -47,11 +48,11 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
-                // CORS / CSRF
+                // 1) CORS / CSRF
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .csrf(csrf -> csrf.disable())
 
-                // 인증·인가
+                // 2) 인증·인가
                 .authorizeHttpRequests(auth -> auth
                         // OAuth2 진입점과 콜백은 인증 없이 열어두기
                         .requestMatchers(
@@ -65,13 +66,20 @@ public class SecurityConfig {
                         .anyRequest().authenticated()
                 )
 
-                // OAuth2 로그인 활성화
+                // ★★★ 여기 추가: 인증 실패(API 호출 시)에 302가 아닌 401을 던져주기 ★★★
+                .exceptionHandling(ex -> ex
+                        .authenticationEntryPoint(
+                                new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)
+                        )
+                )
+
+                // 3) OAuth2 로그인 활성화
                 .oauth2Login(oauth -> oauth
-                        // **커스텀 성공 핸들러만 사용** (defaultTargetUrl 사용 X)
+                        // 커스텀 성공 핸들러만 사용
                         .successHandler(oAuth2LoginSuccessHandler)
                 )
 
-                // JWT 필터
+                // 4) JWT 필터
                 .addFilterBefore(
                         jwtAuthenticationFilter(),
                         UsernamePasswordAuthenticationFilter.class

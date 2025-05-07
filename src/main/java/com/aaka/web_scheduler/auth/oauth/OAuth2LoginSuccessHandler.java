@@ -1,67 +1,74 @@
 package com.aaka.web_scheduler.auth.oauth;
 
-import java.io.IOException;
-import java.time.Duration;
-
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.ResponseCookie;
+import java.io.IOException;
+
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.security.web.authentication.SimpleUrlAuthenticationSuccessHandler;
-import org.springframework.stereotype.Component;
+import org.springframework.stereotype.Service;
 
 import com.aaka.web_scheduler.global.jwt.JwtProvider;
-import com.aaka.web_scheduler.domain.user.repository.UserRepository;
 import com.aaka.web_scheduler.domain.user.entity.User;
+import com.aaka.web_scheduler.domain.user.repository.UserRepository;
 
-@Component
+@Service
 public class OAuth2LoginSuccessHandler extends SimpleUrlAuthenticationSuccessHandler {
-    private final JwtProvider jwtProvider;
-    private final UserRepository userRepository;
 
-    public OAuth2LoginSuccessHandler(JwtProvider jwtProvider,
-                                     UserRepository userRepository) {
+    private final JwtProvider jwtProvider;
+    private final UserRepository userRepo;
+
+    public OAuth2LoginSuccessHandler(
+            JwtProvider jwtProvider,
+            UserRepository userRepo,
+            @Value("${app.frontend.base-url}") String frontendBaseUrl,
+            @Value("${app.frontend.workspace-path}") String workspacePath
+    ) {
+        // application.yml 에 정의한 frontendBaseUrl + workspacePath 로 리다이렉트
+        super(frontendBaseUrl + workspacePath);
+        setAlwaysUseDefaultTargetUrl(true);
+
         this.jwtProvider = jwtProvider;
-        this.userRepository = userRepository;
+        this.userRepo    = userRepo;
     }
 
     @Override
-    public void onAuthenticationSuccess(HttpServletRequest req,
-                                        HttpServletResponse res,
-                                        Authentication auth) throws IOException {
-        // 1) OAuth2User 에서 이메일 꺼내기
-        String email;
-        Object principal = auth.getPrincipal();
-        if (principal instanceof OAuth2User) {
-            email = ((OAuth2User) principal).getAttribute("email");
-        } else {
-            // 혹시 다른 유형의 Principal 이 올 경우 대비
-            email = auth.getName();
-        }
+    public void onAuthenticationSuccess(
+            HttpServletRequest  request,
+            HttpServletResponse response,
+            Authentication      authentication
+    ) throws IOException, ServletException {
 
-        // 2) DB에 유저가 없다면 저장 (CustomOAuth2UserService 에서 이미 저장했더라도 안전하게)
-        User user = userRepository.findByEmail(email)
-                .orElseGet(() -> userRepository.save(new User(email, null)));
+        // 1) OAuth2User 에서 이메일·이름 추출
+        var oauthUser = (org.springframework.security.oauth2.core.user.DefaultOAuth2User)
+                authentication.getPrincipal();
+        String email = oauthUser.getAttribute("email");
+        String name  = oauthUser.getAttribute("name");
 
-        // 3) 이메일 기반으로 JWT 생성
+        // 2) DB에 없는 유저라면 저장
+        User user = userRepo.findByEmail(email)
+                .orElseGet(() ->
+                        userRepo.save(User.builder()
+                                .email(email)
+                                .name(name)
+                                .build())
+                );
+
+        // 3) JWT 생성 후 쿠키에 담기
         String token = jwtProvider.generateToken(email);
+        Cookie cookie = new Cookie("ACCESS_TOKEN", token);
+        cookie.setHttpOnly(true);
+        cookie.setSecure(true);  // HTTPS 환경이 아니라면 false 로 설정
+        cookie.setPath("/");
+        // getExpirationMillis() 는 JwtProvider 에서 @Value 로 주입된 만료시간(ms)을 반환
+        cookie.setMaxAge((int)(jwtProvider.getExpirationMillis() / 1000));
+        response.addCookie(cookie);
 
-        // 4) httpOnly 쿠키에 담기
-        ResponseCookie cookie = ResponseCookie.from("ACCESS_TOKEN", token)
-                .httpOnly(true)
-                .secure(true)
-                .path("/")
-                .maxAge(Duration.ofHours(1))
-                .sameSite("Lax")
-                .build();
-        res.setHeader(HttpHeaders.SET_COOKIE, cookie.toString());
-
-        // 5) 성공 응답 (리다이렉트 없이 JSON)
-        res.setContentType("application/json");
-        res.getWriter().write("{\"status\":\"ok\"}");
-        res.getWriter().flush();
+        // 4) 프론트(/workspace)로 리다이렉트
+        super.onAuthenticationSuccess(request, response, authentication);
     }
 }

@@ -30,7 +30,7 @@ public class JwtProvider {
      * 이메일(subject) 기반으로 JWT 생성
      */
     public String generateToken(String email) {
-        Date now = new Date();
+        Date now    = new Date();
         Date expiry = new Date(now.getTime() + validityInMilliseconds);
 
         return Jwts.builder()
@@ -44,7 +44,10 @@ public class JwtProvider {
     /** 토큰 검증 */
     public boolean validateToken(String token) {
         try {
-            Jwts.parserBuilder().setSigningKey(key).build().parseClaimsJws(token);
+            Jwts.parserBuilder()
+                    .setSigningKey(key)
+                    .build()
+                    .parseClaimsJws(token);
             return true;
         } catch (Exception e) {
             return false;
@@ -59,5 +62,10 @@ public class JwtProvider {
                 .parseClaimsJws(token)
                 .getBody();
         return claims.getSubject();
+    }
+
+    /** JWT 만료시간(밀리초) 반환 */
+    public long getExpirationMillis() {
+        return validityInMilliseconds;
     }
 }
